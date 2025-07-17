@@ -11,6 +11,7 @@ import { shopifyClient, PRODUCTS_QUERY, SEARCH_PRODUCTS_QUERY } from '../../lib/
 import { ProductsResponse, SearchProductsResponse } from '../../types/shopify';
 import { transformProduct, debounce } from '../../lib/shopify-utils';
 import { Product, ProductFilters, ProductSortOptions } from '../../types/shopify';
+import { mockProducts } from '../../lib/mock-data';
 
 export function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -37,41 +38,85 @@ export function ProductsPage() {
     try {
       setIsLoading(true);
 
-      let response;
+      // Check if Shopify credentials are configured
+      const hasShopifyCredentials = import.meta.env.VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN && 
+                                   import.meta.env.VITE_SHOPIFY_STORE_DOMAIN;
       
-      if (searchQuery.trim()) {
-        // Use search query
-        response = await shopifyClient.request<SearchProductsResponse>(SEARCH_PRODUCTS_QUERY, {
-          variables: {
-            query: searchQuery,
-            first: 50
-          }
-        });
-      } else {
-        // Load all products
-        response = await shopifyClient.request<ProductsResponse>(PRODUCTS_QUERY, {
-          variables: {
-            first: 50
-          }
-        });
-      }
+      let transformedProducts: Product[] = [];
 
-      if (response.data?.products) {
-        let transformedProducts = response.data.products.edges.map(edge => 
-          transformProduct(edge.node)
-        );
-
-        // Apply client-side filters
-        transformedProducts = applyFilters(transformedProducts, filters);
+      if (hasShopifyCredentials) {
+        // Use real Shopify API
+        let response;
         
-        // Apply client-side sorting
-        transformedProducts = applySorting(transformedProducts, sortOptions);
+        if (searchQuery.trim()) {
+          // Use search query
+          response = await shopifyClient.request<SearchProductsResponse>(SEARCH_PRODUCTS_QUERY, {
+            variables: {
+              query: searchQuery,
+              first: 50
+            }
+          });
+        } else {
+          // Load all products
+          response = await shopifyClient.request<ProductsResponse>(PRODUCTS_QUERY, {
+            variables: {
+              first: 50
+            }
+          });
+        }
 
-        setProducts(transformedProducts);
+        if (response.data?.products) {
+          transformedProducts = response.data.products.edges.map(edge => 
+            transformProduct(edge.node)
+          );
+        }
+      } else {
+        // Use mock data for demonstration
+        console.log('Using mock data - configure Shopify credentials to connect to real store');
+        transformedProducts = [...mockProducts];
+        
+        // Apply search to mock data
+        if (searchQuery.trim()) {
+          const query = searchQuery.toLowerCase();
+          transformedProducts = transformedProducts.filter(product =>
+            product.title.toLowerCase().includes(query) ||
+            product.description.toLowerCase().includes(query) ||
+            product.vendor.toLowerCase().includes(query) ||
+            product.tags.some(tag => tag.toLowerCase().includes(query))
+          );
+        }
       }
+
+      // Apply client-side filters
+      transformedProducts = applyFilters(transformedProducts, filters);
+      
+      // Apply client-side sorting
+      transformedProducts = applySorting(transformedProducts, sortOptions);
+
+      setProducts(transformedProducts);
     } catch (error) {
-      console.error('Failed to load products:', error);
-      setProducts([]);
+      console.error('Failed to load products, falling back to mock data:', error);
+      // Fallback to mock data if Shopify API fails
+      let transformedProducts = [...mockProducts];
+      
+      // Apply search to mock data
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        transformedProducts = transformedProducts.filter(product =>
+          product.title.toLowerCase().includes(query) ||
+          product.description.toLowerCase().includes(query) ||
+          product.vendor.toLowerCase().includes(query) ||
+          product.tags.some(tag => tag.toLowerCase().includes(query))
+        );
+      }
+      
+      // Apply client-side filters
+      transformedProducts = applyFilters(transformedProducts, filters);
+      
+      // Apply client-side sorting
+      transformedProducts = applySorting(transformedProducts, sortOptions);
+
+      setProducts(transformedProducts);
     } finally {
       setIsLoading(false);
     }

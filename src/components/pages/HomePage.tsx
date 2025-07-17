@@ -7,6 +7,7 @@ import { shopifyClient, PRODUCTS_QUERY } from '../../lib/shopify';
 import { ProductsResponse } from '../../types/shopify';
 import { transformProduct } from '../../lib/shopify-utils';
 import { Product } from '../../types/shopify';
+import { mockProducts } from '../../lib/mock-data';
 
 export function HomePage() {
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
@@ -20,20 +21,33 @@ export function HomePage() {
     try {
       setIsLoading(true);
       
-      const response = await shopifyClient.request<ProductsResponse>(PRODUCTS_QUERY, {
-        variables: {
-          first: 8
-        }
-      });
+      // Check if Shopify credentials are configured
+      const hasShopifyCredentials = import.meta.env.VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN && 
+                                   import.meta.env.VITE_SHOPIFY_STORE_DOMAIN;
+      
+      if (hasShopifyCredentials) {
+        // Use real Shopify API
+        const response = await shopifyClient.request<ProductsResponse>(PRODUCTS_QUERY, {
+          variables: {
+            first: 8
+          }
+        });
 
-      if (response.data?.products) {
-        const transformedProducts = response.data.products.edges.map(edge => 
-          transformProduct(edge.node)
-        );
-        setFeaturedProducts(transformedProducts);
+        if (response.data?.products) {
+          const transformedProducts = response.data.products.edges.map(edge => 
+            transformProduct(edge.node)
+          );
+          setFeaturedProducts(transformedProducts);
+        }
+      } else {
+        // Use mock data for demonstration
+        console.log('Using mock data - configure Shopify credentials to connect to real store');
+        setFeaturedProducts(mockProducts.slice(0, 8));
       }
     } catch (error) {
-      console.error('Failed to load featured products:', error);
+      console.error('Failed to load featured products, falling back to mock data:', error);
+      // Fallback to mock data if Shopify API fails
+      setFeaturedProducts(mockProducts.slice(0, 8));
     } finally {
       setIsLoading(false);
     }

@@ -23,6 +23,7 @@ import {
   storeCartId, 
   removeStoredCartId 
 } from '../lib/shopify-utils';
+import { MockCartService } from '../lib/mock-data';
 
 interface CartState {
   id: string | null;
@@ -98,12 +99,59 @@ interface CartProviderProps {
 export function CartProvider({ children }: CartProviderProps) {
   const [state, dispatch] = useReducer(cartReducer, initialState);
 
+  // Check if we should use mock data
+  const shouldUseMockData = () => {
+    return !import.meta.env.VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN || 
+           !import.meta.env.VITE_SHOPIFY_STORE_DOMAIN;
+  };
+
+  // Helper to transform mock cart data
+  const transformMockCart = (mockCart: any) => ({
+    id: mockCart.id,
+    items: mockCart.lines.edges.map((edge: any) => ({
+      id: edge.node.id,
+      variantId: edge.node.merchandise.id,
+      productId: edge.node.merchandise.product.id,
+      title: edge.node.merchandise.product.title,
+      variantTitle: edge.node.merchandise.title,
+      quantity: edge.node.quantity,
+      price: parseFloat(edge.node.merchandise.price.amount),
+      totalPrice: parseFloat(edge.node.cost.totalAmount.amount),
+      currencyCode: edge.node.merchandise.price.currencyCode,
+      image: edge.node.merchandise.product.images.edges[0]?.node || null,
+      handle: edge.node.merchandise.product.handle,
+    })),
+    totalQuantity: mockCart.totalQuantity,
+    totalAmount: parseFloat(mockCart.cost.totalAmount.amount),
+    subtotalAmount: parseFloat(mockCart.cost.subtotalAmount.amount),
+    totalTaxAmount: 0,
+    currencyCode: mockCart.cost.totalAmount.currencyCode,
+    checkoutUrl: mockCart.checkoutUrl,
+  });
+
   // Initialize cart on mount
   useEffect(() => {
     initializeCart();
   }, []);
 
   const initializeCart = async () => {
+    if (shouldUseMockData()) {
+      // Initialize mock cart
+      try {
+        dispatch({ type: 'SET_LOADING', payload: true });
+        const mockCart = await MockCartService.getCart();
+        
+        dispatch({
+          type: 'SET_CART',
+          payload: transformMockCart(mockCart)
+        });
+      } catch (error) {
+        console.error('Failed to initialize mock cart:', error);
+        dispatch({ type: 'SET_ERROR', payload: 'Failed to load cart' });
+      }
+      return;
+    }
+
     const storedCartId = getStoredCartId();
     
     if (storedCartId) {
@@ -187,6 +235,19 @@ export function CartProvider({ children }: CartProviderProps) {
     dispatch({ type: 'SET_LOADING', payload: true });
 
     try {
+      if (shouldUseMockData()) {
+        // Use mock cart service
+        const mockCart = await MockCartService.addToCart(variantId, quantity);
+        
+        dispatch({
+          type: 'SET_CART',
+          payload: transformMockCart(mockCart)
+        });
+
+        toast.success('Added to cart!');
+        return;
+      }
+
       if (!state.id) {
         await createCart(variantId, quantity);
         return;
@@ -229,11 +290,24 @@ export function CartProvider({ children }: CartProviderProps) {
   };
 
   const updateCartItem = async (lineId: string, quantity: number) => {
-    if (!state.id) return;
-
     dispatch({ type: 'SET_LOADING', payload: true });
 
     try {
+      if (shouldUseMockData()) {
+        // Use mock cart service
+        const mockCart = await MockCartService.updateCartItem(lineId, quantity);
+        
+        dispatch({
+          type: 'SET_CART',
+          payload: transformMockCart(mockCart)
+        });
+
+        toast.success('Cart updated!');
+        return;
+      }
+
+      if (!state.id) return;
+
       const response = await shopifyClient.request<CartLinesUpdateResponse>(UPDATE_CART_MUTATION, {
         variables: {
           cartId: state.id,
@@ -271,11 +345,24 @@ export function CartProvider({ children }: CartProviderProps) {
   };
 
   const removeFromCart = async (lineId: string) => {
-    if (!state.id) return;
-
     dispatch({ type: 'SET_LOADING', payload: true });
 
     try {
+      if (shouldUseMockData()) {
+        // Use mock cart service
+        const mockCart = await MockCartService.removeFromCart(lineId);
+        
+        dispatch({
+          type: 'SET_CART',
+          payload: transformMockCart(mockCart)
+        });
+
+        toast.success('Removed from cart!');
+        return;
+      }
+
+      if (!state.id) return;
+
       const response = await shopifyClient.request<CartLinesRemoveResponse>(REMOVE_FROM_CART_MUTATION, {
         variables: {
           cartId: state.id,
