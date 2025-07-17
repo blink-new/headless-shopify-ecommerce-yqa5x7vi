@@ -7,7 +7,7 @@ const SHOPIFY_STOREFRONT_ACCESS_TOKEN = import.meta.env.VITE_SHOPIFY_STOREFRONT_
 // Create Shopify Storefront API client
 export const shopifyClient = createStorefrontApiClient({
   storeDomain: SHOPIFY_STORE_DOMAIN,
-  apiVersion: '2024-01',
+  apiVersion: '2025-01',
   publicAccessToken: SHOPIFY_STOREFRONT_ACCESS_TOKEN,
 });
 
